@@ -1,68 +1,109 @@
 "use server";
 
-import { z } from "zod";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
-const RegisterSchema = z
-  .object({
-    name: z.string(),
-    email: z.email("E-mail inválido."),
-    password: z
-      .string()
-      .min(6, "A senha deve ter pelo menos 6 caracteres."),
-    confirm: z
-      .string()
-      .min(6, "Confirmação inválida."),
-  })
-  .refine((v) => v.password === v.confirm, {
-    message: "As senhas não coincidem.",
-    path: ["confirm"],
-  });
+const API = process.env.API_BASE_URL ?? "http://localhost:3001";
+const TOKEN_COOKIE = "auth_token";
 
-export type RegisterState = {
-  ok: boolean;
-  errors?: {
-    name?: string;
-    email?: string;
-    password?: string;
-    confirm?: string;
-    _form?: string;
-  };
-};
+type State = { error?: string };
 
-export async function signUp(
-  _prev: RegisterState | undefined,
+const ApiError = z.object({
+  message: z.string(),
+  statusCode: z.number().optional(),
+  error: z.string().optional(),
+});
+type ApiError = z.infer<typeof ApiError>;
+
+const LoginSuccess = z.object({ access_token: z.string() });
+type LoginSuccess = z.infer<typeof LoginSuccess>;
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+export async function registerAndLogin(
+  _prev: State | undefined,
   formData: FormData
-): Promise<RegisterState> {
-  const raw = {
-    name: String(formData.get("name") ?? "").trim(),
-    email: String(formData.get("email") ?? "").trim(),
-    password: String(formData.get("password") ?? ""),
-    confirm: String(formData.get("confirm") ?? ""),
-  };
+): Promise<State> {
+  const name = String(formData.get("name") || "").trim();
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const password = String(formData.get("password") || "");
+  const confirm = String(formData.get("confirm") || "");
 
-  const parsed = RegisterSchema.safeParse(raw);
-  if (!parsed.success) {
-    const fieldErrors: NonNullable<RegisterState["errors"]> = {};
-    for (const issue of parsed.error.issues) {
-      const key = issue.path[0];
-      if (key === "name" || key === "email" || key === "password" || key === "confirm") {
-        if (!fieldErrors[key]) fieldErrors[key] = issue.message;
-      }
-    }
-    if (
-      !fieldErrors.name &&
-      !fieldErrors.email &&
-      !fieldErrors.password &&
-      !fieldErrors.confirm
-    ) {
-      fieldErrors._form = "Não foi possível validar os dados.";
-    }
-    return { ok: false, errors: fieldErrors };
+  if (!name || !email || !password) return { error: "Preencha todos os campos." };
+  if (password !== confirm) return { error: "As senhas não coincidem." };
+
+  let register: Response;
+  try {
+    register = await fetch(`${API}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({ name, email, password, role: "viewer" }),
+    });
+  } catch {
+    return { error: "Falha de conexão com o servidor." };
   }
 
-  // TODO: chamada real para API de criação de conta
-  await new Promise((r) => setTimeout(r, 700));
+  const registerText = await register.text();
+  const registerData = parseJson(registerText);
 
-  redirect("/auth/login");
+  if (register.status < 200 || register.status >= 300) {
+    const err = ApiError.safeParse(registerData);
+    if (register.status === 409 || (err.success && err.data.message === "Email already in use")) {
+      return { error: "Este e-mail já está em uso." };
+    }
+    return {
+      error: err.success ? err.data.message : `Não foi possível criar sua conta (HTTP ${register.status}).`,
+    };
+  }
+
+  let login: Response;
+  try {
+    login = await fetch(`${API}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({ email, password }),
+    });
+  } catch {
+    return { error: "Conta criada, mas houve falha ao iniciar sessão." };
+  }
+
+  const loginText = await login.text();
+  const loginData = parseJson(loginText);
+
+  if (login.status < 200 || login.status >= 300) {
+    const err = ApiError.safeParse(loginData);
+    const msg =
+      err.success && err.data.message === "Invalid credentials"
+        ? "Conta criada, mas não foi possível entrar. Tente fazer login."
+        : (err.success ? err.data.message : `Conta criada, porém login falhou (HTTP ${login.status}).`);
+    return { error: msg };
+  }
+
+  const parsedLogin = LoginSuccess.safeParse(loginData);
+  console.log(parsedLogin);
+  if (!parsedLogin.success) {
+    return { error: "Conta criada, porém a resposta de login é inválida." };
+  }
+
+  const jar = await cookies();
+  jar.set(TOKEN_COOKIE, parsedLogin.data.access_token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 7,
+  });
+
+  revalidatePath("/", "layout");
+  redirect("/dashboard");
 }

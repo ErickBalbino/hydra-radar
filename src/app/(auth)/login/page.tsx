@@ -1,14 +1,20 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import { authenticate } from "./actions";
 import LoginForm from "./_components/LoginForm";
 
 export const metadata: Metadata = {
-  title: "Entrar",
+  title: "Hydra | Entrar",
   description: "Faça login para continuar.",
   robots: { index: false, follow: false },
 };
 
-export default function LoginPage() {
+type Props = { searchParams: Promise<{ next?: string }> };
+
+export default async function LoginPage({ searchParams }: Props) {
+  const params = await searchParams;
+  const next = params?.next ?? "";
+
   return (
     <section className="min-h-dvh grid md:[grid-template-columns:40%_60%] bg-[--color-bg]">
       <div
@@ -23,7 +29,7 @@ export default function LoginPage() {
           alt=""
           fill
           priority
-          className="object-cover"
+          className="object-cover object-right"
         />
         <div className="absolute inset-0 bg-black/10 md:bg-transparent" />
       </div>
@@ -44,7 +50,7 @@ export default function LoginPage() {
           </div>
 
           <div className="mt-6 rounded-md bg-[--color-card]/90 backdrop-blur shadow-lg border border-gray-200 p-5 sm:p-6">
-            <LoginForm />
+            <LoginForm action={authenticate} next={next} />
           </div>
         </div>
       </div>

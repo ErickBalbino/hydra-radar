@@ -1,52 +1,91 @@
 "use server";
 
-import { z } from "zod";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
-const LoginSchema = z.object({
-  email: z.email("E-mail inválido."),
-  password: z.string().min(6, "A senha deve ter pelo menos 6 caracteres."),
+const API = process.env.API_BASE_URL ?? "http://localhost:3001";
+const TOKEN_COOKIE = "auth_token";
+
+type State = { error?: string };
+
+const LoginSuccess = z.object({ access_token: z.string() });
+type LoginSuccess = z.infer<typeof LoginSuccess>;
+
+const ApiError = z.object({
+  message: z.string(),
+  statusCode: z.number().optional(),
+  error: z.string().optional(),
 });
+type ApiError = z.infer<typeof ApiError>;
 
-export type LoginState = {
-  ok: boolean;
-  errors?: {
-    email?: string;
-    password?: string;
-    _form?: string;
-  };
-};
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
 
-export async function signIn(
-  _prevState: LoginState | undefined,
+export async function authenticate(
+  _prev: State | undefined,
   formData: FormData
-): Promise<LoginState> {
-  const raw = {
-    email: String(formData.get("email") ?? "").trim(),
-    password: String(formData.get("password") ?? ""),
-  };
+): Promise<State> {
+  const email = String(formData.get("email") || "").trim();
+  const password = String(formData.get("password") || "");
+  const next = String(formData.get("next") || "");
 
-  const parsed = LoginSchema.safeParse(raw);
+  if (!email || !password) return { error: "Informe e-mail e senha." };
 
-  if (!parsed.success) {
-    const fieldErrors: NonNullable<LoginState["errors"]> = {};
-
-    for (const issue of parsed.error.issues) {
-      const key = issue.path[0];
-      if (key === "email" || key === "password") {
-        if (!fieldErrors[key]) fieldErrors[key] = issue.message;
-      }
-    }
-
-    if (!fieldErrors.email && !fieldErrors.password) {
-      fieldErrors._form = "Não foi possível validar os dados.";
-    }
-
-    return { ok: false, errors: fieldErrors };
+  let res: Response;
+  try {
+    res = await fetch(`${API}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({ email, password }),
+    });
+  } catch {
+    return { error: "Falha de conexão com o servidor de autenticação." };
   }
 
-  // TODO: integração real com API/autenticação
-  await new Promise((r) => setTimeout(r, 600));
+  const raw = await res.text();
+  const data = parseJson(raw);
 
-  redirect("/protected");
+  if (res.status === 401) {
+    const parsedErr = ApiError.safeParse(data);
+    const msg =
+      parsedErr.success && parsedErr.data.message === "Invalid credentials"
+        ? "Email e/ou senha são inválidos."
+        : (parsedErr.success ? parsedErr.data.message : "Não foi possível entrar. Tente novamente.");
+    return { error: msg };
+  }
+
+  if (res.status < 200 || res.status >= 300) {
+    const parsedErr = ApiError.safeParse(data);
+    return {
+      error: parsedErr.success
+        ? parsedErr.data.message
+        : `Falha ao entrar (HTTP ${res.status}).`,
+    };
+  }
+
+  const parsedOk = LoginSuccess.safeParse(data);
+  if (!parsedOk.success) {
+    return { error: "Resposta inválida do servidor de autenticação." };
+  }
+
+  const jar = await cookies();
+  jar.set(TOKEN_COOKIE, parsedOk.data.access_token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 7,
+  });
+
+  revalidatePath("/", "layout");
+  const dest = next && next.startsWith("/") ? next : "/dashboard";
+  redirect(dest);
 }

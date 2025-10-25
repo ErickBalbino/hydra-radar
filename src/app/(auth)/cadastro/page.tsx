@@ -19,11 +19,11 @@ export default function RegisterPage() {
         aria-hidden="true"
       >
         <Image
-          src="/login-hero.jpg" /* use a mesma hero ou troque por /register-hero.jpg */
+          src="/login-hero.png"
           alt=""
           fill
           priority
-          className="object-cover"
+          className="object-cover object-right"
         />
         <div className="absolute inset-0 bg-black/10 md:bg-transparent" />
       </div>
@@ -43,7 +43,7 @@ export default function RegisterPage() {
             </h1>
           </div>
 
-          <div className="mt-6 rounded-[--radius-xl] bg-[--color-card]/90 backdrop-blur border border-[--color-border] p-5 sm:p-6 shadow-card">
+          <div className="mt-6 rounded-md bg-[--color-card]/90 backdrop-blur shadow-lg border border-gray-200 p-5 sm:p-6">
             <RegisterForm />
           </div>
         </div>

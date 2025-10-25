@@ -1,26 +1,62 @@
 "use client";
 
-import { useActionState, useState } from "react";
-import { signUp, type RegisterState } from "../actions";
+import { useActionState, startTransition, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
+import Button from "@/components/ui/Button";
+import { schema, type RegisterFormValues } from "../schema";
+import { registerAndLogin } from "../actions";
 
-const initialState: RegisterState = { ok: false };
+type State = { error?: string };
+
+const initialState: State = {};
 
 export default function RegisterForm() {
-  const [state, formAction, pending] = useActionState(signUp, initialState);
+  const [state, formAction, pending] = useActionState<State, FormData>(
+    registerAndLogin,
+    initialState
+  );
+
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
+  const {
+    register,
+    trigger,
+    formState: { errors },
+  } = useForm<RegisterFormValues>({
+    resolver: zodResolver(schema),
+    mode: "onSubmit",
+    reValidateMode: "onChange",
+  });
+
+  async function handleValidateAndSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget as HTMLFormElement;
+
+    const ok = await trigger(undefined, { shouldFocus: true });
+    if (!ok) return;
+
+    const data = new FormData(form);
+    startTransition(() => formAction(data));
+  }
+
   return (
-    <form action={formAction} className="space-y-4" noValidate>
-      {state?.errors?._form && (
+    <form
+      action={formAction}
+      className="space-y-4"
+      noValidate
+      onSubmit={handleValidateAndSubmit}
+    >
+      {state?.error && (
         <div
-          className="rounded-md border border-error-200 bg-error-50 p-3 text-sm text-error-700"
+          className="rounded-md border border-red-300 bg-red-300 p-3 text-sm text-red-900"
           role="alert"
           aria-live="polite"
         >
-          {state.errors._form}
+          {state.error}
         </div>
       )}
 
@@ -30,18 +66,19 @@ export default function RegisterForm() {
         </label>
         <input
           id="name"
-          name="name"
           type="text"
           autoComplete="name"
           required
-          aria-invalid={!!state?.errors?.name || undefined}
-          aria-describedby={state?.errors?.name ? "name-error" : undefined}
-          className="w-full rounded-[--radius-md] border border-neutral-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-accent-500"
+          aria-invalid={!!errors.name || undefined}
+          aria-describedby={errors.name ? "name-error" : undefined}
+          className="w-full rounded-sm border border-neutral-400 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-accent-500"
           placeholder="Seu nome"
+          {...register("name")}
+          disabled={pending}
         />
-        {state?.errors?.name && (
+        {errors.name && (
           <p id="name-error" className="text-sm text-error-700" role="alert">
-            {state.errors.name}
+            {errors.name.message}
           </p>
         )}
       </div>
@@ -52,19 +89,20 @@ export default function RegisterForm() {
         </label>
         <input
           id="email"
-          name="email"
           type="email"
-          autoComplete="email"
           inputMode="email"
+          autoComplete="email"
           required
-          aria-invalid={!!state?.errors?.email || undefined}
-          aria-describedby={state?.errors?.email ? "email-error" : undefined}
-          className="w-full rounded-[--radius-md] border border-neutral-200 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-accent-500"
+          aria-invalid={!!errors.email || undefined}
+          aria-describedby={errors.email ? "email-error" : undefined}
+          className="w-full rounded-sm border border-neutral-400 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-accent-500"
           placeholder="voce@exemplo.com"
+          {...register("email")}
+          disabled={pending}
         />
-        {state?.errors?.email && (
+        {errors.email && (
           <p id="email-error" className="text-sm text-error-700" role="alert">
-            {state.errors.email}
+            {errors.email.message}
           </p>
         )}
       </div>
@@ -76,17 +114,16 @@ export default function RegisterForm() {
         <div className="relative">
           <input
             id="password"
-            name="password"
             type={showPwd ? "text" : "password"}
             autoComplete="new-password"
             required
             minLength={6}
-            aria-invalid={!!state?.errors?.password || undefined}
-            aria-describedby={
-              state?.errors?.password ? "password-error" : undefined
-            }
-            className="w-full rounded-[--radius-md] border border-neutral-200 bg-white px-3 py-2 pr-10 outline-none focus:ring-2 focus:ring-accent-500"
-            placeholder="Crie uma senha"
+            aria-invalid={!!errors.password || undefined}
+            aria-describedby={errors.password ? "password-error" : undefined}
+            className="w-full rounded-sm border border-neutral-400 bg-white px-3 py-2 pr-10 outline-none focus:ring-2 focus:ring-accent-500"
+            placeholder="••••••"
+            {...register("password")}
+            disabled={pending}
           />
           <button
             type="button"
@@ -97,13 +134,13 @@ export default function RegisterForm() {
             {showPwd ? <EyeOff size={20} /> : <Eye size={20} />}
           </button>
         </div>
-        {state?.errors?.password && (
+        {errors.password && (
           <p
             id="password-error"
             className="text-sm text-error-700"
             role="alert"
           >
-            {state.errors.password}
+            {errors.password.message}
           </p>
         )}
       </div>
@@ -115,17 +152,16 @@ export default function RegisterForm() {
         <div className="relative">
           <input
             id="confirm"
-            name="confirm"
             type={showConfirm ? "text" : "password"}
             autoComplete="new-password"
             required
             minLength={6}
-            aria-invalid={!!state?.errors?.confirm || undefined}
-            aria-describedby={
-              state?.errors?.confirm ? "confirm-error" : undefined
-            }
-            className="w-full rounded-[--radius-md] border border-neutral-200 bg-white px-3 py-2 pr-10 outline-none focus:ring-2 focus:ring-accent-500"
-            placeholder="Repita sua senha"
+            aria-invalid={!!errors.confirm || undefined}
+            aria-describedby={errors.confirm ? "confirm-error" : undefined}
+            className="w-full rounded-sm border border-neutral-400 bg-white px-3 py-2 pr-10 outline-none focus:ring-2 focus:ring-accent-500"
+            placeholder="••••••"
+            {...register("confirm")}
+            disabled={pending}
           />
           <button
             type="button"
@@ -138,26 +174,21 @@ export default function RegisterForm() {
             {showConfirm ? <EyeOff size={20} /> : <Eye size={20} />}
           </button>
         </div>
-        {state?.errors?.confirm && (
-          <p id="confirm-error" className="text-sm text-error-700" role="alert">
-            {state.errors.confirm}
+        {errors.confirm && (
+          <p id="confirm-error" className="text-sm text-red-700" role="alert">
+            {errors.confirm.message}
           </p>
         )}
       </div>
 
-      <button
-        type="submit"
-        aria-disabled={pending}
-        disabled={pending}
-        className="mt-6 w-full rounded-[--radius-md] bg-brand-800 text-white px-4 py-2 font-medium transition-colors hover:bg-brand-900 disabled:opacity-60 hover:cursor-pointer"
-      >
-        {pending ? "Criando..." : "Criar conta"}
-      </button>
+      <Button type="submit" loading={pending} fullWidth className="mt-6">
+        Criar conta
+      </Button>
 
       <p className="text-center text-neutral-700">
         Já possui conta?{" "}
         <Link
-          href="/auth/login"
+          href="/login"
           className="text-brand-800 hover:underline underline-offset-4"
         >
           Entrar
