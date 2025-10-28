@@ -1,27 +1,68 @@
 "use client";
+
 import Button from "@/components/ui/Button";
 import { useState } from "react";
 
-export default function ActionsExport() {
-  const [loading, setLoading] = useState<string | null>(null);
+type Kind = "readings" | "alerts";
+type Format = "csv" | "json";
 
-  async function download(url: string, name: string) {
-    setLoading(name);
+const BASE = (process.env.NEXT_PUBLIC_BASE_URL || "").replace(/\/+$/, "");
+
+function buildUrl(kind: Kind, format: Format) {
+  const path = `/export/${kind}.${format}`;
+  return `${BASE}${path}`;
+}
+
+function filenameFromHeaders(headers: Headers, fallback: string) {
+  const cd = headers.get("content-disposition");
+  if (!cd) return fallback;
+  const m = /filename\*=UTF-8''([^;]+)|filename="?([^"]+)"?/i.exec(cd);
+  const raw = decodeURIComponent(m?.[1] ?? m?.[2] ?? fallback);
+  return raw.replace(/[/\\?%*:|"<>]/g, "_");
+}
+
+interface Props {
+  token: string;
+}
+
+export default function ActionsExport({token}: Props) {
+  const [loadingKey, setLoadingKey] = useState<string | null>(null);
+
+  async function download(kind: Kind, format: Format) {
+    const key = `${kind}-${format}`;
+    setLoadingKey(key);
     try {
-      const r = await fetch(url);
-      if (r.status >= 200 && r.status < 300) {
-        const blob = await r.blob();
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = `${name}-${Date.now()}.${
-          url.includes("json") ? "json" : "csv"
-        }`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      }
+      const url = buildUrl(kind, format);
+      const res = await fetch(url, {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+        headers: {
+          Accept: format === "json" ? "application/json" : "text/csv",
+          "X-Requested-With": "XMLHttpRequest",
+          Authorization: `Bearer ${token}`
+        },
+      });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+
+      const blob = await res.blob();
+      const suggested = filenameFromHeaders(
+        res.headers,
+        `${kind}-${new Date()
+          .toISOString()
+          .slice(0, 19)
+          .replace(/[:T]/g, "")}.${format}`
+      );
+
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = suggested;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(a.href);
     } finally {
-      setLoading(null);
+      setLoadingKey(null);
     }
   }
 
@@ -31,33 +72,29 @@ export default function ActionsExport() {
       <div className="ml-auto flex gap-2">
         <Button
           variant="outline"
-          onClick={() =>
-            download("/api/export/readings?format=csv", "leituras")
-          }
-          loading={loading === "leituras"}
+          loading={loadingKey === "readings-csv"}
+          onClick={() => download("readings", "csv")}
         >
           Leituras CSV
         </Button>
         <Button
           variant="outline"
-          onClick={() =>
-            download("/api/export/readings?format=json", "leituras")
-          }
-          loading={loading === "leituras"}
+          loading={loadingKey === "readings-json"}
+          onClick={() => download("readings", "json")}
         >
           Leituras JSON
         </Button>
         <Button
           variant="outline"
-          onClick={() => download("/api/export/alerts?format=csv", "alertas")}
-          loading={loading === "alertas"}
+          loading={loadingKey === "alerts-csv"}
+          onClick={() => download("alerts", "csv")}
         >
           Alertas CSV
         </Button>
         <Button
           variant="outline"
-          onClick={() => download("/api/export/alerts?format=json", "alertas")}
-          loading={loading === "alertas"}
+          loading={loadingKey === "alerts-json"}
+          onClick={() => download("alerts", "json")}
         >
           Alertas JSON
         </Button>

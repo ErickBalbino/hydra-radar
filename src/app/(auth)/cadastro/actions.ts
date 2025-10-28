@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-const API = process.env.API_BASE_URL ?? "http://localhost:3001";
+const API = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3001";
 const TOKEN_COOKIE = "auth_token";
 
 type State = { error?: string };

@@ -82,7 +82,6 @@ body {
 
 /* Focus ring consistente */
 :where(a,button,input,textarea,select,[role="button"]):focus-visible {
-  @apply ring-1 ring-offset-2 ring-brand-900 ring-offset-white rounded-[--radius-md];
 }
 
 /* Utilidades globais leves */

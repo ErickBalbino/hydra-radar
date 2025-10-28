@@ -4,6 +4,7 @@ import type { Me } from "@/lib/auth";
 import { useTransition } from "react";
 import { LogOut } from "lucide-react";
 import { signOut } from "@/lib/auth-actions";
+import { normalizeRole } from "@/utils/normalizeRole";
 
 function getInitial(name?: string, email?: string) {
   const base = (name ?? email ?? "").trim();
@@ -30,7 +31,7 @@ export default function HeaderBar({ me }: { me: Me | null }) {
                 {me.email}
               </p>
               <p className="truncate text-xs text-slate-600 max-sm:hidden">
-                {(me.role ?? "viewer").toUpperCase()}
+                {(normalizeRole(me.role) ?? "Visualizador").toUpperCase()}
               </p>
             </div>
           </div>
@@ -43,7 +44,7 @@ export default function HeaderBar({ me }: { me: Me | null }) {
             type="button"
             onClick={() => start(() => signOut())}
             aria-label="Sair"
-            className="inline-flex items-center gap-2 rounded-[--radius-md] border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-[--radius-md] border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-60 cursor-pointer"
             disabled={pending}
           >
             <LogOut size={16} />

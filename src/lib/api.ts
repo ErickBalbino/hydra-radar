@@ -25,3 +25,26 @@ export async function apiPut<T>(path: string, token: string, body: unknown) {
   if (r.status < 200 || r.status >= 300) throw new Error(`HTTP ${r.status}`);
   return readJson<T>(r);
 }
+
+export async function apiPost<T>(path: string, token: string, body: unknown) {
+  const r = await fetch(`${API}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    cache: "no-store",
+    body: JSON.stringify(body),
+  });
+  if (r.status < 200 || r.status >= 300) throw new Error(`HTTP ${r.status}`);
+  return r.status === 204 ? (undefined as unknown as T) : readJson<T>(r);
+}
+
+export async function apiDelete(path: string, token: string) {
+  const r = await fetch(`${API}${path}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (r.status < 200 || r.status >= 300) throw new Error(`HTTP ${r.status}`);
+  try {
+    await r.text();
+  } catch {}
+}

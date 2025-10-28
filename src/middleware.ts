@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { PROTECTED_PREFIXES } from "@/lib/routes";
+import { PROTECTED_PREFIXES, AUTH_ROUTES } from "@/lib/routes";
 
 const TOKEN_COOKIE = "auth_token";
 
@@ -10,6 +10,12 @@ function startsWithAny(pathname: string, prefixes: string[]) {
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
   const hasToken = Boolean(req.cookies.get(TOKEN_COOKIE)?.value);
+
+  if (AUTH_ROUTES.includes(pathname) && hasToken) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return NextResponse.redirect(url);
+  }
 
   if (startsWithAny(pathname, PROTECTED_PREFIXES) && !hasToken) {
     const url = req.nextUrl.clone();

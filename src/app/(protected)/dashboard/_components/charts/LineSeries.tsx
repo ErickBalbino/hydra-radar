@@ -18,7 +18,7 @@ export default function LineSeries({ data }: P) {
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="4 4" />
           <XAxis dataKey="ts" tick={{ fontSize: 12 }} />
-          <YAxis tick={{ fontSize: 12 }} />
+          <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
           <Tooltip />
           <Line
             type="monotone"

@@ -1,22 +1,24 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { getToken, API } from "@/lib/auth";
 
-const API = process.env.API_BASE_URL ?? "http://localhost:3001";
-const TOKEN_COOKIE = "auth_token";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const token = (await cookies()).get(TOKEN_COOKIE)?.value;
-  if (!token) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  const token = await getToken();
+  if (!token) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+  }
 
+  const upstream = await fetch(`${API}/users`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+
+  const text = await upstream.text();
   try {
-    const res = await fetch(`${API}/users`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-
-    const json = await res.json().catch(() => ({}));
-    return NextResponse.json(json, { status: res.status });
+    const json = text ? JSON.parse(text) : [];
+    return NextResponse.json(json, { status: upstream.status });
   } catch {
-    return NextResponse.json({ message: "Service unavailable" }, { status: 503 });
+    return NextResponse.json({ message: "Invalid payload" }, { status: 502 });
   }
 }

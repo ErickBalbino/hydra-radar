@@ -13,11 +13,12 @@ type Props = {
   totals: Totals;
   lineData: { ts: string; value: number }[];
   barData: { label: string; value: number }[]; 
+  token: string
 };
 
-export default function DashboardClient({ totals, lineData, barData }: Props) {
+export default function DashboardClient({ totals, lineData, barData, token }: Props) {
   return (
-    <section className="space-y-6">
+    <section className="space-y-6 outline-0">
       <header className="grid gap-3 sm:grid-cols-3">
         <CardStat label="Sensores" value={totals.sensors} />
         <CardStat label="Alertas" value={totals.alerts} />
@@ -51,7 +52,7 @@ export default function DashboardClient({ totals, lineData, barData }: Props) {
       </div>
 
       <div className="rounded-md bg-white border border-gray-200 p-4 shadow-card">
-        <ActionsExport />
+        <ActionsExport token={token} />
       </div>
     </section>
   );
